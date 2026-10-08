@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reports | NSBT Library Admin</title>
+<link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
+
+<link rel="stylesheet" href="/assets/style.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+<body>
+
+  <div class="sidebar">
+    <div class="brand"><i class="fa-solid fa-book-open"></i><span>NSBT Library</span></div>
+    <div class="brand-sub">Admin Portal</div>
+    <div class="user-chip">
+      <div class="avatar" id="avatar">--</div>
+      <div class="who"><div class="name" id="userName">Loading</div><div class="role" id="userRole">Loading</div></div>
+    </div>
+    <nav>
+      <a href="/admin/dashboard.html"><i class="fa-solid fa-gauge"></i><span>Dashboard</span></a>
+      <a href="/admin/addbook.html"><i class="fa-solid fa-book-medical"></i><span>Add Book</span></a>
+      <a href="/admin/editbook.html"><i class="fa-solid fa-pen-to-square"></i><span>Edit Book</span></a>
+      <a href="/admin/issuebook.html"><i class="fa-solid fa-right-left"></i><span>Issue Book</span></a>
+      <a href="/admin/users.html"><i class="fa-solid fa-users"></i><span>Users</span></a>
+      <a href="/admin/fine.html"><i class="fa-solid fa-money-bill-wave"></i><span>Fine</span></a>
+      <a href="/admin/reports.html" class="active"><i class="fa-solid fa-chart-column"></i><span>Reports</span></a>
+      <div class="nav-divider"></div>
+      <a href="#" class="logout" onclick="Auth.logout(); return false;"><i class="fa-solid fa-right-from-bracket"></i><span>Logout</span></a>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="links"><a href="/privacy.html">Privacy</a><a href="/terms.html">Terms</a></div>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="topbar">
+      <div><h1>Reports</h1><p class="subtitle">A live summary of library activity</p></div>
+    </div>
+
+    <div class="summary-grid">
+      <div class="summary-box"><div class="label">Total Book Titles</div><div class="value" id="repTitles">0</div></div>
+      <div class="summary-box"><div class="label">Total Copies</div><div class="value" id="repBooks">0</div></div>
+      <div class="summary-box"><div class="label">Total Users</div><div class="value" id="repUsers">0</div></div>
+      <div class="summary-box"><div class="label">Books Currently Issued</div><div class="value" id="repIssued">0</div></div>
+      <div class="summary-box"><div class="label">Fine Collected</div><div class="value" id="repFineCollected">₹0</div></div>
+      <div class="summary-box"><div class="label">Fine Outstanding</div><div class="value" id="repFineOutstanding">₹0</div></div>
+    </div>
+
+    <div class="panel">
+      <h2>Recent Issues</h2>
+      <p class="panel-subtitle">The last 5 books issued</p>
+      <table>
+        <thead><tr><th>Book Title</th><th>User</th><th>Due Date</th><th>Status</th></tr></thead>
+        <tbody id="recentTable"><tr class="empty-row"><td colspan="4">Loading...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script src="/assets/api.js"></script>
+  <script>
+    const user = Auth.requireRole("admin");
+    if (user) {
+      document.getElementById("userName").textContent = user.name;
+      document.getElementById("userRole").textContent = user.role;
+      document.getElementById("avatar").textContent = initials(user.name);
+    }
+
+    async function loadReports() {
+      try {
+        const s = await api("/reports/summary");
+        document.getElementById("repTitles").textContent = s.totalTitles;
+        document.getElementById("repBooks").textContent = s.totalBooks;
+        document.getElementById("repUsers").textContent = s.totalUsers;
+        document.getElementById("repIssued").textContent = s.booksIssued;
+        document.getElementById("repFineCollected").textContent = "₹" + s.fineCollected;
+        document.getElementById("repFineOutstanding").textContent = "₹" + s.fineOutstanding;
+
+        const recentTable = document.getElementById("recentTable");
+        if (s.recentIssues.length === 0) {
+          recentTable.innerHTML = '<tr class="empty-row"><td colspan="4">No books issued yet.</td></tr>';
+        } else {
+          recentTable.innerHTML = s.recentIssues
+            .map(function (i) {
+              const label = i.status === "returned" ? "Returned" : "Issued";
+              const cls = i.status === "returned" ? "returned" : "issued";
+              return (
+                "<tr><td>" + i.book_title + "</td><td>" + i.user_name + "</td><td>" + formatDate(i.due_date) + "</td>" +
+                '<td><span class="status-pill ' + cls + '">' + label + "</span></td></tr>"
+              );
+            })
+            .join("");
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    if (user) loadReports();
+  </script>
+
+</body>
+</html>

@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Users | NSBT Library Admin</title>
+<link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
+
+<link rel="stylesheet" href="/assets/style.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+<body>
+
+  <div class="sidebar">
+    <div class="brand"><i class="fa-solid fa-book-open"></i><span>NSBT Library</span></div>
+    <div class="brand-sub">Admin Portal</div>
+    <div class="user-chip">
+      <div class="avatar" id="avatar">--</div>
+      <div class="who"><div class="name" id="userName">Loading</div><div class="role" id="userRole">Loading</div></div>
+    </div>
+    <nav>
+      <a href="/admin/dashboard.html"><i class="fa-solid fa-gauge"></i><span>Dashboard</span></a>
+      <a href="/admin/addbook.html"><i class="fa-solid fa-book-medical"></i><span>Add Book</span></a>
+      <a href="/admin/editbook.html"><i class="fa-solid fa-pen-to-square"></i><span>Edit Book</span></a>
+      <a href="/admin/issuebook.html"><i class="fa-solid fa-right-left"></i><span>Issue Book</span></a>
+      <a href="/admin/users.html" class="active"><i class="fa-solid fa-users"></i><span>Users</span></a>
+      <a href="/admin/fine.html"><i class="fa-solid fa-money-bill-wave"></i><span>Fine</span></a>
+      <a href="/admin/reports.html"><i class="fa-solid fa-chart-column"></i><span>Reports</span></a>
+      <div class="nav-divider"></div>
+      <a href="#" class="logout" onclick="Auth.logout(); return false;"><i class="fa-solid fa-right-from-bracket"></i><span>Logout</span></a>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="links"><a href="/privacy.html">Privacy</a><a href="/terms.html">Terms</a></div>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="topbar">
+      <div><h1>Users</h1><p class="subtitle">Manage students and faculty registered with the library</p></div>
+    </div>
+
+    <div class="panel">
+      <div class="form-row">
+        <div class="field"><label for="uName">Full Name</label><input type="text" id="uName" placeholder="e.g. Rahul Sharma"></div>
+        <div class="field"><label for="uEmail">Email</label><input type="email" id="uEmail" placeholder="rahul@nsbtmgmu.edu.in"></div>
+        <div class="field"><label for="uPassword">Login Password</label><input type="text" id="uPassword" placeholder="Temporary password"></div>
+        <div class="field">
+          <label for="uRole">Type</label>
+          <select id="uRole">
+            <option value="student">Student</option>
+            <option value="faculty">Faculty</option>
+            <option value="admin">Library Admin</option>
+          </select>
+        </div>
+        <div class="field"><label for="uRegNo">Reg. No / Employee ID</label><input type="text" id="uRegNo" placeholder="Optional"></div>
+        <div class="field"><label for="uCourse">Course / Department</label><input type="text" id="uCourse" placeholder="Optional"></div>
+        <button class="btn btn-primary" onclick="addUser()">Add User</button>
+      </div>
+      <p class="msg" id="msg"></p>
+    </div>
+
+    <div class="panel">
+      <h2>Registered Users</h2>
+      <table>
+        <thead><tr><th>Name</th><th>Email</th><th>Type</th><th>Reg. No / ID</th><th>Actions</th></tr></thead>
+        <tbody id="userTable"><tr class="empty-row"><td colspan="5">Loading...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script src="/assets/api.js"></script>
+  <script>
+    const user = Auth.requireRole("admin");
+    if (user) {
+      document.getElementById("userName").textContent = user.name;
+      document.getElementById("userRole").textContent = user.role;
+      document.getElementById("avatar").textContent = initials(user.name);
+    }
+
+    async function addUser() {
+      const name = document.getElementById("uName").value.trim();
+      const email = document.getElementById("uEmail").value.trim();
+      const password = document.getElementById("uPassword").value;
+      const role = document.getElementById("uRole").value;
+      const reg_no = document.getElementById("uRegNo").value.trim();
+      const course = document.getElementById("uCourse").value.trim();
+
+      if (!name || !email || !password) {
+        flashMsg("msg", "Please enter a name, email and password.", true);
+        return;
+      }
+
+      try {
+        await api("/users", { method: "POST", body: JSON.stringify({ name, email, password, role, reg_no, course }) });
+        ["uName", "uEmail", "uPassword", "uRegNo", "uCourse"].forEach(function (id) { document.getElementById(id).value = ""; });
+        flashMsg("msg", "User added. Share their email + password so they can log in.", false);
+        renderUsers();
+      } catch (err) {
+        flashMsg("msg", err.message, true);
+      }
+    }
+
+    async function deleteUser(id) {
+      if (!confirm("Remove this user?")) return;
+      try {
+        await api("/users/" + id, { method: "DELETE" });
+        renderUsers();
+      } catch (err) {
+        flashMsg("msg", err.message, true);
+      }
+    }
+
+    async function renderUsers() {
+      const table = document.getElementById("userTable");
+      try {
+        const users = await api("/users");
+        if (users.length === 0) {
+          table.innerHTML = '<tr class="empty-row"><td colspan="5">No users added yet.</td></tr>';
+          return;
+        }
+        table.innerHTML = users
+          .map(function (u) {
+            return (
+              "<tr><td>" + u.name + "</td><td>" + u.email + "</td><td>" + u.role + "</td><td>" + (u.reg_no || "Not set") + "</td>" +
+              '<td><div class="action-buttons"><button class="btn btn-danger" onclick="deleteUser(' + u.id + ')">Delete</button></div></td></tr>'
+            );
+          })
+          .join("");
+      } catch (err) {
+        table.innerHTML = '<tr class="empty-row"><td colspan="5">' + err.message + "</td></tr>";
+      }
+    }
+
+    if (user) renderUsers();
+  </script>
+
+</body>
+</html>

@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fines | NSBT Library</title>
+<link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
+
+<link rel="stylesheet" href="/assets/style.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+<body>
+
+  <div class="sidebar">
+    <div class="brand">
+      <i class="fa-solid fa-book-open"></i>
+      <span>NSBT Library</span>
+    </div>
+    <div class="brand-sub">Student Portal</div>
+
+    <div class="user-chip">
+      <div class="avatar" id="avatar">--</div>
+      <div class="who">
+        <div class="name" id="userName">Loading</div>
+        <div class="role" id="userRole">Loading</div>
+      </div>
+    </div>
+
+    <nav>
+      <a href="/student/dashboard.html"><i class="fa-solid fa-house"></i><span>Dashboard</span></a>
+      <a href="/student/browse.html"><i class="fa-solid fa-magnifying-glass"></i><span>Browse Books</span></a>
+      <a href="/student/mybooks.html"><i class="fa-solid fa-book"></i><span>My Books</span></a>
+      <a href="/student/fines.html" class="active"><i class="fa-solid fa-money-bill"></i><span>Fines</span></a>
+
+      <div class="nav-divider"></div>
+
+      <a href="#" class="logout" onclick="Auth.logout(); return false;"><i class="fa-solid fa-right-from-bracket"></i><span>Logout</span></a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="links"><a href="/privacy.html">Privacy</a><a href="/terms.html">Terms</a></div>
+    </div>
+  </div>
+
+  <div class="main">
+
+    <div class="topbar">
+      <div>
+        <h1>Fines</h1>
+        <p class="subtitle">Outstanding and past fines on your account</p>
+      </div>
+    </div>
+
+    <div class="fine-box" id="fineBox">
+      <i class="fa-solid fa-circle-check"></i>
+      <h3>Total Outstanding</h3>
+      <p class="fine-amount" id="fineTotal">₹0</p>
+      <p class="fine-note" id="fineNote">Loading...</p>
+    </div>
+
+    <div class="panel">
+      <h2>Fine History</h2>
+      <p class="panel-subtitle">Every fine recorded against your account</p>
+      <table>
+        <thead>
+          <tr>
+            <th>Book</th>
+            <th>Reason</th>
+            <th>Amount</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="fineTable">
+          <tr class="empty-row"><td colspan="4">Loading...</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+  </div>
+
+  <script src="/assets/api.js"></script>
+  <script>
+    const user = Auth.requireAnyRole(["student", "faculty"]);
+    if (user) {
+      document.getElementById("userName").textContent = user.name;
+      document.getElementById("userRole").textContent = user.role;
+      document.getElementById("avatar").textContent = initials(user.name);
+    }
+
+    async function loadFines() {
+      const table = document.getElementById("fineTable");
+      const box = document.getElementById("fineBox");
+      try {
+        const fines = await api("/fines");
+        const outstanding = fines.filter((f) => !f.paid).reduce((sum, f) => sum + f.amount, 0);
+
+        document.getElementById("fineTotal").textContent = "₹" + outstanding;
+        box.classList.toggle("has-due", outstanding > 0);
+        document.getElementById("fineBox").querySelector("i").className =
+          outstanding > 0 ? "fa-solid fa-triangle-exclamation" : "fa-solid fa-circle-check";
+        document.getElementById("fineNote").textContent =
+          outstanding > 0 ? "Please clear this at the library desk." : "No pending fines.";
+
+        if (fines.length === 0) {
+          table.innerHTML = '<tr class="empty-row"><td colspan="4">No fines recorded.</td></tr>';
+          return;
+        }
+
+        table.innerHTML = fines
+          .map(function (f) {
+            const statusClass = f.paid ? "paid" : "unpaid";
+            const statusLabel = f.paid ? "Paid" : "Unpaid";
+            return (
+              "<tr><td>" + f.book_title + "</td><td>" + (f.reason === "Late" ? "Late Return" : f.reason) + "</td>" +
+              "<td>₹" + f.amount + "</td>" +
+              '<td><span class="status-pill ' + statusClass + '">' + statusLabel + "</span></td></tr>"
+            );
+          })
+          .join("");
+      } catch (err) {
+        table.innerHTML = '<tr class="empty-row"><td colspan="4">' + err.message + "</td></tr>";
+      }
+    }
+
+    if (user) loadFines();
+  </script>
+
+</body>
+</html>

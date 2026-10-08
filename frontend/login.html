@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Login | NSBT Library</title>
+<link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
+
+<link rel="stylesheet" href="/assets/style.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+<body>
+
+  <div class="login-page">
+
+    <div class="login-side">
+      <i class="fa-solid fa-book"></i>
+      <h1>NSBT Library</h1>
+      <p>Catalog, issuing and fines for the Nath School of Business &amp; Technology library, MGM University.</p>
+      <div class="facts">
+        <div><b>8+</b> subject areas in the catalog</div>
+        <div><b>14-day</b> standard loan period</div>
+        <div><b>₹5/day</b> late fine, applied automatically on return</div>
+      </div>
+    </div>
+
+    <div class="login-form-side">
+      <h2>Sign in</h2>
+      <p class="lead">Use the login given to you by the library desk.</p>
+
+      <div class="switch-role">
+        <button type="button" id="tabStudent" class="active" onclick="setRole('student')">Student / Faculty</button>
+        <button type="button" id="tabAdmin" onclick="setRole('admin')">Library Admin</button>
+      </div>
+
+      <form id="loginForm" onsubmit="handleLogin(event)">
+        <div class="field">
+          <label for="email">Email</label>
+          <input type="email" id="email" placeholder="you@nsbtmgmu.edu.in" required>
+        </div>
+        <div class="field">
+          <label for="password">Password</label>
+          <input type="password" id="password" placeholder="Enter your password" required>
+        </div>
+        <button type="submit" class="btn btn-primary" id="submitBtn">Sign in</button>
+      </form>
+
+      <p class="msg" id="msg"></p>
+
+      <div class="hint" id="demoHint">
+        <b>Demo student login</b><br>
+        student@nsbtmgmu.edu.in / Student@123
+      </div>
+
+      <div class="login-footer">
+        <a href="/privacy.html">Privacy Policy</a>
+        <a href="/terms.html">Terms &amp; Conditions</a>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="/assets/api.js"></script>
+  <script>
+    let selectedRole = "student";
+
+    function setRole(role) {
+      selectedRole = role;
+      document.getElementById("tabStudent").classList.toggle("active", role === "student");
+      document.getElementById("tabAdmin").classList.toggle("active", role === "admin");
+      document.getElementById("demoHint").innerHTML = role === "admin"
+        ? "<b>Demo admin login</b><br>admin@nsbtmgmu.edu.in / Admin@123"
+        : "<b>Demo student login</b><br>student@nsbtmgmu.edu.in / Student@123";
+    }
+
+    (function redirectIfLoggedIn() {
+      const user = Auth.getUser();
+      if (user && Auth.getToken()) {
+        window.location.href = user.role === "admin" ? "/admin/dashboard.html" : "/student/dashboard.html";
+      }
+    })();
+
+    async function handleLogin(e) {
+      e.preventDefault();
+      const email = document.getElementById("email").value.trim();
+      const password = document.getElementById("password").value;
+      const btn = document.getElementById("submitBtn");
+
+      btn.disabled = true;
+      btn.textContent = "Signing in...";
+
+      try {
+        const data = await api("/auth/login", {
+          method: "POST",
+          body: JSON.stringify({ email, password }),
+        });
+
+        if (selectedRole === "admin" && data.user.role !== "admin") {
+          throw new Error("That account is not a library admin account.");
+        }
+        if (selectedRole === "student" && data.user.role === "admin") {
+          throw new Error("That is an admin account. Switch to Library Admin above.");
+        }
+
+        Auth.setSession(data.token, data.user);
+        window.location.href = data.user.role === "admin" ? "/admin/dashboard.html" : "/student/dashboard.html";
+      } catch (err) {
+        flashMsg("msg", err.message, true);
+        btn.disabled = false;
+        btn.textContent = "Sign in";
+      }
+    }
+  </script>
+
+</body>
+</html>

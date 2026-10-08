@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Issue Book | NSBT Library Admin</title>
+<link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
+
+<link rel="stylesheet" href="/assets/style.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+<body>
+
+  <div class="sidebar">
+    <div class="brand"><i class="fa-solid fa-book-open"></i><span>NSBT Library</span></div>
+    <div class="brand-sub">Admin Portal</div>
+    <div class="user-chip">
+      <div class="avatar" id="avatar">--</div>
+      <div class="who"><div class="name" id="userName">Loading</div><div class="role" id="userRole">Loading</div></div>
+    </div>
+    <nav>
+      <a href="/admin/dashboard.html"><i class="fa-solid fa-gauge"></i><span>Dashboard</span></a>
+      <a href="/admin/addbook.html"><i class="fa-solid fa-book-medical"></i><span>Add Book</span></a>
+      <a href="/admin/editbook.html"><i class="fa-solid fa-pen-to-square"></i><span>Edit Book</span></a>
+      <a href="/admin/issuebook.html" class="active"><i class="fa-solid fa-right-left"></i><span>Issue Book</span></a>
+      <a href="/admin/users.html"><i class="fa-solid fa-users"></i><span>Users</span></a>
+      <a href="/admin/fine.html"><i class="fa-solid fa-money-bill-wave"></i><span>Fine</span></a>
+      <a href="/admin/reports.html"><i class="fa-solid fa-chart-column"></i><span>Reports</span></a>
+      <div class="nav-divider"></div>
+      <a href="#" class="logout" onclick="Auth.logout(); return false;"><i class="fa-solid fa-right-from-bracket"></i><span>Logout</span></a>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="links"><a href="/privacy.html">Privacy</a><a href="/terms.html">Terms</a></div>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="topbar">
+      <div><h1>Issue Book</h1><p class="subtitle">Issue a book from the catalog to a student or faculty member</p></div>
+    </div>
+
+    <div class="panel">
+      <div class="form-row">
+        <div class="field"><label for="bookSelect">Book</label><select id="bookSelect"></select></div>
+        <div class="field"><label for="userSelect">User</label><select id="userSelect"></select></div>
+        <div class="field"><label for="dueDate">Due Date</label><input type="date" id="dueDate"></div>
+        <button class="btn btn-primary" onclick="issueBook()">Issue Book</button>
+      </div>
+      <p class="msg" id="msg"></p>
+    </div>
+
+    <div class="panel">
+      <h2>Active Issues</h2>
+      <p class="panel-subtitle">Books currently checked out</p>
+      <table>
+        <thead><tr><th>Book Title</th><th>User</th><th>Due Date</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody id="issueTable"><tr class="empty-row"><td colspan="5">Loading...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script src="/assets/api.js"></script>
+  <script>
+    const user = Auth.requireRole("admin");
+    if (user) {
+      document.getElementById("userName").textContent = user.name;
+      document.getElementById("userRole").textContent = user.role;
+      document.getElementById("avatar").textContent = initials(user.name);
+    }
+
+    // Default due date: 14 days from today.
+    (function setDefaultDueDate() {
+      const d = new Date();
+      d.setDate(d.getDate() + 14);
+      document.getElementById("dueDate").value = d.toISOString().slice(0, 10);
+    })();
+
+    async function populateSelects() {
+      try {
+        const [books, users] = await Promise.all([api("/books"), api("/users")]);
+
+        const available = books.filter(function (b) { return b.available_qty > 0; });
+        const bookSelect = document.getElementById("bookSelect");
+        bookSelect.innerHTML = available.length
+          ? available.map(function (b) { return '<option value="' + b.id + '">' + b.title + " (" + b.available_qty + " available)</option>"; }).join("")
+          : '<option value="">No copies available</option>';
+
+        const borrowers = users.filter(function (u) { return u.role !== "admin"; });
+        const userSelect = document.getElementById("userSelect");
+        userSelect.innerHTML = borrowers.length
+          ? borrowers.map(function (u) { return '<option value="' + u.id + '">' + u.name + " (" + u.role + ")</option>"; }).join("")
+          : '<option value="">Add a user first</option>';
+      } catch (err) {
+        flashMsg("msg", err.message, true);
+      }
+    }
+
+    async function issueBook() {
+      const bookId = Number(document.getElementById("bookSelect").value);
+      const userId = Number(document.getElementById("userSelect").value);
+      const dueDate = document.getElementById("dueDate").value;
+
+      if (!bookId || !userId || !dueDate) {
+        flashMsg("msg", "Please choose a book, a user, and a due date.", true);
+        return;
+      }
+
+      try {
+        const issue = await api("/issues", {
+          method: "POST",
+          body: JSON.stringify({ book_id: bookId, user_id: userId, due_date: dueDate }),
+        });
+        flashMsg("msg", "'" + issue.book_title + "' issued to " + issue.user_name + ".", false);
+        await populateSelects();
+        await renderIssues();
+      } catch (err) {
+        flashMsg("msg", err.message, true);
+      }
+    }
+
+    async function returnBook(id) {
+      try {
+        const result = await api("/issues/" + id + "/return", { method: "PUT" });
+        if (result.fine) {
+          flashMsg("msg", "Returned, " + result.daysLate + " day(s) late. ₹" + result.fine.amount + " fine recorded.", false);
+        } else {
+          flashMsg("msg", "Book returned on time. No fine.", false);
+        }
+        await populateSelects();
+        await renderIssues();
+      } catch (err) {
+        flashMsg("msg", err.message, true);
+      }
+    }
+
+    async function renderIssues() {
+      const table = document.getElementById("issueTable");
+      try {
+        const issues = (await api("/issues")).filter(function (i) { return i.status === "issued"; });
+        if (issues.length === 0) {
+          table.innerHTML = '<tr class="empty-row"><td colspan="5">No books currently issued.</td></tr>';
+          return;
+        }
+        table.innerHTML = issues
+          .map(function (i) {
+            const overdue = isOverdue(i.due_date, i.status);
+            return (
+              "<tr><td>" + i.book_title + "</td><td>" + i.user_name + "</td><td>" + formatDate(i.due_date) + "</td>" +
+              '<td><span class="status-pill ' + (overdue ? "overdue" : "issued") + '">' + (overdue ? "Overdue" : "Issued") + "</span></td>" +
+              '<td><div class="action-buttons"><button class="btn btn-success" onclick="returnBook(' + i.id + ')">Return</button></div></td></tr>'
+            );
+          })
+          .join("");
+      } catch (err) {
+        table.innerHTML = '<tr class="empty-row"><td colspan="5">' + err.message + "</td></tr>";
+      }
+    }
+
+    if (user) { populateSelects(); renderIssues(); }
+  </script>
+
+</body>
+</html>

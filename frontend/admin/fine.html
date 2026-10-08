@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fine | NSBT Library Admin</title>
+<link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
+
+<link rel="stylesheet" href="/assets/style.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+<body>
+
+  <div class="sidebar">
+    <div class="brand"><i class="fa-solid fa-book-open"></i><span>NSBT Library</span></div>
+    <div class="brand-sub">Admin Portal</div>
+    <div class="user-chip">
+      <div class="avatar" id="avatar">--</div>
+      <div class="who"><div class="name" id="userName">Loading</div><div class="role" id="userRole">Loading</div></div>
+    </div>
+    <nav>
+      <a href="/admin/dashboard.html"><i class="fa-solid fa-gauge"></i><span>Dashboard</span></a>
+      <a href="/admin/addbook.html"><i class="fa-solid fa-book-medical"></i><span>Add Book</span></a>
+      <a href="/admin/editbook.html"><i class="fa-solid fa-pen-to-square"></i><span>Edit Book</span></a>
+      <a href="/admin/issuebook.html"><i class="fa-solid fa-right-left"></i><span>Issue Book</span></a>
+      <a href="/admin/users.html"><i class="fa-solid fa-users"></i><span>Users</span></a>
+      <a href="/admin/fine.html" class="active"><i class="fa-solid fa-money-bill-wave"></i><span>Fine</span></a>
+      <a href="/admin/reports.html"><i class="fa-solid fa-chart-column"></i><span>Reports</span></a>
+      <div class="nav-divider"></div>
+      <a href="#" class="logout" onclick="Auth.logout(); return false;"><i class="fa-solid fa-right-from-bracket"></i><span>Logout</span></a>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="links"><a href="/privacy.html">Privacy</a><a href="/terms.html">Terms</a></div>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="topbar">
+      <div>
+        <h1>Fine on Late or Misused Book</h1>
+        <p class="subtitle">Late fines are added automatically on return. Use this to record a damage or misuse fine, or add one manually.</p>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="form-row">
+        <div class="field"><label for="userSelect">User</label><select id="userSelect"></select></div>
+        <div class="field"><label for="bookTitle">Book Title</label><input type="text" id="bookTitle" placeholder="Book title"></div>
+        <div class="field">
+          <label for="reason">Reason</label>
+          <select id="reason" onchange="toggleReasonFields()">
+            <option value="Late">Late Return</option>
+            <option value="Misuse">Misused or Damaged</option>
+          </select>
+        </div>
+        <div class="field" id="daysLateField"><label for="daysLate">Days Late</label><input type="number" id="daysLate" min="0" placeholder="0"></div>
+        <div class="field" id="amountField" style="display:none"><label for="amount">Amount (₹)</label><input type="number" id="amount" min="0" placeholder="200"></div>
+        <button class="btn btn-primary" onclick="calculateFine()">Add Fine</button>
+      </div>
+      <p class="msg" id="msg"></p>
+    </div>
+
+    <div class="panel">
+      <h2>Fine Records</h2>
+      <table>
+        <thead><tr><th>User</th><th>Book Title</th><th>Reason</th><th>Fine Amount</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody id="fineTable"><tr class="empty-row"><td colspan="6">Loading...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script src="/assets/api.js"></script>
+  <script>
+    const user = Auth.requireRole("admin");
+    if (user) {
+      document.getElementById("userName").textContent = user.name;
+      document.getElementById("userRole").textContent = user.role;
+      document.getElementById("avatar").textContent = initials(user.name);
+    }
+
+    function toggleReasonFields() {
+      const isLate = document.getElementById("reason").value === "Late";
+      document.getElementById("daysLateField").style.display = isLate ? "" : "none";
+      document.getElementById("amountField").style.display = isLate ? "none" : "";
+    }
+
+    async function populateUsers() {
+      try {
+        const users = (await api("/users")).filter(function (u) { return u.role !== "admin"; });
+        const select = document.getElementById("userSelect");
+        select.innerHTML = users.length
+          ? users.map(function (u) { return '<option value="' + u.id + '">' + u.name + " (" + u.role + ")</option>"; }).join("")
+          : '<option value="">Add a user first</option>';
+      } catch (err) {
+        flashMsg("msg", err.message, true);
+      }
+    }
+
+    async function calculateFine() {
+      const userId = Number(document.getElementById("userSelect").value);
+      const bookTitle = document.getElementById("bookTitle").value.trim();
+      const reason = document.getElementById("reason").value;
+      const daysLate = document.getElementById("daysLate").value;
+      const amount = document.getElementById("amount").value;
+
+      if (!userId || !bookTitle) {
+        flashMsg("msg", "Please choose a user and enter the book title.", true);
+        return;
+      }
+
+      try {
+        const fine = await api("/fines", {
+          method: "POST",
+          body: JSON.stringify({ user_id: userId, book_title: bookTitle, reason, days_late: daysLate, amount }),
+        });
+        flashMsg("msg", "Fine added: ₹" + fine.amount, false);
+        document.getElementById("bookTitle").value = "";
+        document.getElementById("daysLate").value = "";
+        document.getElementById("amount").value = "";
+        renderFines();
+      } catch (err) {
+        flashMsg("msg", err.message, true);
+      }
+    }
+
+    async function markPaid(id) {
+      try {
+        await api("/fines/" + id + "/pay", { method: "PUT" });
+        renderFines();
+      } catch (err) {
+        flashMsg("msg", err.message, true);
+      }
+    }
+
+    async function deleteFine(id) {
+      if (!confirm("Delete this fine record?")) return;
+      try {
+        await api("/fines/" + id, { method: "DELETE" });
+        renderFines();
+      } catch (err) {
+        flashMsg("msg", err.message, true);
+      }
+    }
+
+    async function renderFines() {
+      const table = document.getElementById("fineTable");
+      try {
+        const fines = await api("/fines");
+        if (fines.length === 0) {
+          table.innerHTML = '<tr class="empty-row"><td colspan="6">No fines recorded.</td></tr>';
+          return;
+        }
+        table.innerHTML = fines
+          .map(function (f) {
+            const statusClass = f.paid ? "paid" : "unpaid";
+            const statusLabel = f.paid ? "Paid" : "Unpaid";
+            const actions = f.paid
+              ? '<button class="btn btn-danger" onclick="deleteFine(' + f.id + ')">Delete</button>'
+              : '<button class="btn btn-success" onclick="markPaid(' + f.id + ')">Mark Paid</button> <button class="btn btn-danger" onclick="deleteFine(' + f.id + ')">Delete</button>';
+            return (
+              "<tr><td>" + f.user_name + "</td><td>" + f.book_title + "</td><td>" + (f.reason === "Late" ? "Late Return" : f.reason) + "</td>" +
+              "<td>₹" + f.amount + "</td>" +
+              '<td><span class="status-pill ' + statusClass + '">' + statusLabel + "</span></td>" +
+              '<td><div class="action-buttons">' + actions + "</div></td></tr>"
+            );
+          })
+          .join("");
+      } catch (err) {
+        table.innerHTML = '<tr class="empty-row"><td colspan="6">' + err.message + "</td></tr>";
+      }
+    }
+
+    if (user) { populateUsers(); renderFines(); }
+  </script>
+
+</body>
+</html>

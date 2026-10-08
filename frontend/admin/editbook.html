@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Edit Book | NSBT Library Admin</title>
+<link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
+
+<link rel="stylesheet" href="/assets/style.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+<body>
+
+  <div class="sidebar">
+    <div class="brand"><i class="fa-solid fa-book-open"></i><span>NSBT Library</span></div>
+    <div class="brand-sub">Admin Portal</div>
+    <div class="user-chip">
+      <div class="avatar" id="avatar">--</div>
+      <div class="who"><div class="name" id="userName">Loading</div><div class="role" id="userRole">Loading</div></div>
+    </div>
+    <nav>
+      <a href="/admin/dashboard.html"><i class="fa-solid fa-gauge"></i><span>Dashboard</span></a>
+      <a href="/admin/addbook.html"><i class="fa-solid fa-book-medical"></i><span>Add Book</span></a>
+      <a href="/admin/editbook.html" class="active"><i class="fa-solid fa-pen-to-square"></i><span>Edit Book</span></a>
+      <a href="/admin/issuebook.html"><i class="fa-solid fa-right-left"></i><span>Issue Book</span></a>
+      <a href="/admin/users.html"><i class="fa-solid fa-users"></i><span>Users</span></a>
+      <a href="/admin/fine.html"><i class="fa-solid fa-money-bill-wave"></i><span>Fine</span></a>
+      <a href="/admin/reports.html"><i class="fa-solid fa-chart-column"></i><span>Reports</span></a>
+      <div class="nav-divider"></div>
+      <a href="#" class="logout" onclick="Auth.logout(); return false;"><i class="fa-solid fa-right-from-bracket"></i><span>Logout</span></a>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="links"><a href="/privacy.html">Privacy</a><a href="/terms.html">Terms</a></div>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="topbar">
+      <div><h1>Edit Book</h1><p class="subtitle">Update the details of an existing book</p></div>
+    </div>
+
+    <div class="panel">
+      <div class="form-row">
+        <div class="field">
+          <label for="bookSelect">Select Book</label>
+          <select id="bookSelect" onchange="fillForm()"></select>
+        </div>
+        <div class="field"><label for="newTitle">New Title</label><input type="text" id="newTitle" placeholder="New title"></div>
+        <div class="field"><label for="newAuthor">New Author</label><input type="text" id="newAuthor" placeholder="New author"></div>
+        <div class="field"><label for="newCategory">New Category</label><input type="text" id="newCategory" placeholder="New category"></div>
+        <div class="field"><label for="newQty">New Total Quantity</label><input type="number" id="newQty" min="1" placeholder="New quantity"></div>
+        <button class="btn btn-primary" onclick="editBook()">Update Book</button>
+      </div>
+      <p class="msg" id="msg"></p>
+    </div>
+
+    <div class="panel">
+      <h2>Catalog</h2>
+      <p class="panel-subtitle">All books currently in the library</p>
+      <table>
+        <thead><tr><th>Title</th><th>Author</th><th>Category</th><th>Available / Total</th><th>Actions</th></tr></thead>
+        <tbody id="bookTable"><tr class="empty-row"><td colspan="5">Loading...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script src="/assets/api.js"></script>
+  <script>
+    const user = Auth.requireRole("admin");
+    if (user) {
+      document.getElementById("userName").textContent = user.name;
+      document.getElementById("userRole").textContent = user.role;
+      document.getElementById("avatar").textContent = initials(user.name);
+    }
+
+    let cachedBooks = [];
+
+    async function populateSelect() {
+      try {
+        cachedBooks = await api("/books");
+        const select = document.getElementById("bookSelect");
+        if (cachedBooks.length === 0) {
+          select.innerHTML = '<option value="">No books available</option>';
+          return;
+        }
+        select.innerHTML = cachedBooks
+          .map(function (b) { return '<option value="' + b.id + '">' + b.title + " (qty: " + b.total_qty + ")</option>"; })
+          .join("");
+        fillForm();
+      } catch (err) {
+        flashMsg("msg", err.message, true);
+      }
+    }
+
+    function fillForm() {
+      const id = Number(document.getElementById("bookSelect").value);
+      const book = cachedBooks.find(function (b) { return b.id === id; });
+      document.getElementById("newTitle").value = book ? book.title : "";
+      document.getElementById("newAuthor").value = book ? book.author : "";
+      document.getElementById("newCategory").value = book ? (book.category || "") : "";
+      document.getElementById("newQty").value = book ? book.total_qty : "";
+    }
+
+    async function editBook() {
+      const id = Number(document.getElementById("bookSelect").value);
+      if (!id) {
+        flashMsg("msg", "Please select a book to edit.", true);
+        return;
+      }
+
+      const body = {
+        title: document.getElementById("newTitle").value.trim(),
+        author: document.getElementById("newAuthor").value.trim(),
+        category: document.getElementById("newCategory").value.trim(),
+        total_qty: Number(document.getElementById("newQty").value),
+      };
+
+      try {
+        const updated = await api("/books/" + id, { method: "PUT", body: JSON.stringify(body) });
+        flashMsg("msg", "Book '" + updated.title + "' updated. New quantity: " + updated.total_qty, false);
+        await populateSelect();
+        await renderBooks();
+      } catch (err) {
+        flashMsg("msg", err.message, true);
+      }
+    }
+
+    async function deleteBook(id) {
+      if (!confirm("Remove this book from the catalog?")) return;
+      try {
+        await api("/books/" + id, { method: "DELETE" });
+        await populateSelect();
+        await renderBooks();
+      } catch (err) {
+        flashMsg("msg", err.message, true);
+      }
+    }
+
+    async function renderBooks() {
+      const table = document.getElementById("bookTable");
+      try {
+        const books = await api("/books");
+        if (books.length === 0) {
+          table.innerHTML = '<tr class="empty-row"><td colspan="5">No books added yet. Add one from the "Add Book" page first.</td></tr>';
+          return;
+        }
+        table.innerHTML = books
+          .map(function (b) {
+            return (
+              "<tr><td>" + b.title + "</td><td>" + b.author + "</td><td>" + (b.category || "General") + "</td>" +
+              "<td>" + b.available_qty + " / " + b.total_qty + "</td>" +
+              '<td><div class="action-buttons"><button class="btn btn-danger" onclick="deleteBook(' + b.id + ')">Delete</button></div></td></tr>'
+            );
+          })
+          .join("");
+      } catch (err) {
+        table.innerHTML = '<tr class="empty-row"><td colspan="5">' + err.message + "</td></tr>";
+      }
+    }
+
+    if (user) { populateSelect(); renderBooks(); }
+  </script>
+
+</body>
+</html>

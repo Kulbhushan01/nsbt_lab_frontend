@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin Dashboard | NSBT Library</title>
+<link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
+
+<link rel="stylesheet" href="/assets/style.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+<body>
+
+  <div class="sidebar">
+    <div class="brand"><i class="fa-solid fa-book-open"></i><span>NSBT Library</span></div>
+    <div class="brand-sub">Admin Portal</div>
+    <div class="user-chip">
+      <div class="avatar" id="avatar">--</div>
+      <div class="who"><div class="name" id="userName">Loading</div><div class="role" id="userRole">Loading</div></div>
+    </div>
+    <nav>
+      <a href="/admin/dashboard.html" class="active"><i class="fa-solid fa-gauge"></i><span>Dashboard</span></a>
+      <a href="/admin/addbook.html"><i class="fa-solid fa-book-medical"></i><span>Add Book</span></a>
+      <a href="/admin/editbook.html"><i class="fa-solid fa-pen-to-square"></i><span>Edit Book</span></a>
+      <a href="/admin/issuebook.html"><i class="fa-solid fa-right-left"></i><span>Issue Book</span></a>
+      <a href="/admin/users.html"><i class="fa-solid fa-users"></i><span>Users</span></a>
+      <a href="/admin/fine.html"><i class="fa-solid fa-money-bill-wave"></i><span>Fine</span></a>
+      <a href="/admin/reports.html"><i class="fa-solid fa-chart-column"></i><span>Reports</span></a>
+      <div class="nav-divider"></div>
+      <a href="#" class="logout" onclick="Auth.logout(); return false;"><i class="fa-solid fa-right-from-bracket"></i><span>Logout</span></a>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="links"><a href="/privacy.html">Privacy</a><a href="/terms.html">Terms</a></div>
+    </div>
+  </div>
+
+  <div class="main">
+
+    <div class="topbar">
+      <div>
+        <h1>Admin Dashboard</h1>
+        <p class="subtitle">Catalog size, active issues, and fines across the library</p>
+      </div>
+    </div>
+
+    <div class="cards">
+      <div class="card">
+        <div class="card-icon"><i class="fa-solid fa-books"></i></div>
+        <h3>Total Books (copies)</h3>
+        <p id="statBooks">...</p>
+      </div>
+      <div class="card">
+        <div class="card-icon"><i class="fa-solid fa-users"></i></div>
+        <h3>Total Users</h3>
+        <p id="statUsers">...</p>
+      </div>
+      <div class="card">
+        <div class="card-icon"><i class="fa-solid fa-right-left"></i></div>
+        <h3>Books Issued</h3>
+        <p id="statIssued">...</p>
+      </div>
+      <div class="card">
+        <div class="card-icon"><i class="fa-solid fa-money-bill-wave"></i></div>
+        <h3>Fine Collected</h3>
+        <p id="statFine">...</p>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Fines Outstanding</h2>
+      <p class="panel-subtitle" id="fineOutstandingNote">Loading...</p>
+    </div>
+
+  </div>
+
+  <script src="/assets/api.js"></script>
+  <script>
+    const user = Auth.requireRole("admin");
+    if (user) {
+      document.getElementById("userName").textContent = user.name;
+      document.getElementById("userRole").textContent = user.role;
+      document.getElementById("avatar").textContent = initials(user.name);
+    }
+
+    async function loadStats() {
+      try {
+        const s = await api("/reports/summary");
+        document.getElementById("statBooks").textContent = s.totalBooks;
+        document.getElementById("statUsers").textContent = s.totalUsers;
+        document.getElementById("statIssued").textContent = s.booksIssued;
+        document.getElementById("statFine").textContent = "₹" + s.fineCollected;
+        document.getElementById("fineOutstandingNote").textContent =
+          "₹" + s.fineOutstanding + " still unpaid, across " + s.totalTitles + " titles in the catalog.";
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    if (user) loadStats();
+  </script>
+
+</body>
+</html>

@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Browse Books | NSBT Library</title>
+<link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
+
+<link rel="stylesheet" href="/assets/style.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+<body>
+
+  <div class="sidebar">
+    <div class="brand">
+      <i class="fa-solid fa-book-open"></i>
+      <span>NSBT Library</span>
+    </div>
+    <div class="brand-sub">Student Portal</div>
+
+    <div class="user-chip">
+      <div class="avatar" id="avatar">--</div>
+      <div class="who">
+        <div class="name" id="userName">Loading</div>
+        <div class="role" id="userRole">Loading</div>
+      </div>
+    </div>
+
+    <nav>
+      <a href="/student/dashboard.html"><i class="fa-solid fa-house"></i><span>Dashboard</span></a>
+      <a href="/student/browse.html" class="active"><i class="fa-solid fa-magnifying-glass"></i><span>Browse Books</span></a>
+      <a href="/student/mybooks.html"><i class="fa-solid fa-book"></i><span>My Books</span></a>
+      <a href="/student/fines.html"><i class="fa-solid fa-money-bill"></i><span>Fines</span></a>
+
+      <div class="nav-divider"></div>
+
+      <a href="#" class="logout" onclick="Auth.logout(); return false;"><i class="fa-solid fa-right-from-bracket"></i><span>Logout</span></a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="links"><a href="/privacy.html">Privacy</a><a href="/terms.html">Terms</a></div>
+    </div>
+  </div>
+
+  <div class="main">
+
+    <div class="topbar">
+      <div>
+        <h1>Browse Books</h1>
+        <p class="subtitle">Search the full library catalog by title, author or category</p>
+      </div>
+      <div class="topbar-actions">
+        <div class="search-box">
+          <input type="text" id="searchInput" placeholder="Search by title, author or category...">
+          <button onclick="loadBooks()">Search</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <table>
+        <thead>
+          <tr>
+            <th>Title</th>
+            <th>Author</th>
+            <th>Category</th>
+            <th>Availability</th>
+          </tr>
+        </thead>
+        <tbody id="bookTable">
+          <tr class="empty-row"><td colspan="4">Loading...</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+  </div>
+
+  <script src="/assets/api.js"></script>
+  <script>
+    const user = Auth.requireAnyRole(["student", "faculty"]);
+    if (user) {
+      document.getElementById("userName").textContent = user.name;
+      document.getElementById("userRole").textContent = user.role;
+      document.getElementById("avatar").textContent = initials(user.name);
+    }
+
+    async function loadBooks() {
+      const search = document.getElementById("searchInput").value.trim();
+      const table = document.getElementById("bookTable");
+      try {
+        const books = await api("/books" + (search ? "?search=" + encodeURIComponent(search) : ""));
+        if (books.length === 0) {
+          table.innerHTML = '<tr class="empty-row"><td colspan="4">No books found.</td></tr>';
+          return;
+        }
+        table.innerHTML = books
+          .map(function (b) {
+            const available = b.available_qty > 0;
+            const pillClass = available ? "available" : "unavailable";
+            const label = available ? b.available_qty + " of " + b.total_qty + " available" : "All copies issued";
+            return (
+              "<tr><td>" + b.title + "</td><td>" + b.author + "</td><td>" + (b.category || "General") + "</td>" +
+              '<td><span class="status-pill ' + pillClass + '">' + label + "</span></td></tr>"
+            );
+          })
+          .join("");
+      } catch (err) {
+        table.innerHTML = '<tr class="empty-row"><td colspan="4">' + err.message + "</td></tr>";
+      }
+    }
+
+    document.getElementById("searchInput").addEventListener("keydown", function (e) {
+      if (e.key === "Enter") loadBooks();
+    });
+
+    if (user) loadBooks();
+  </script>
+
+</body>
+</html>
